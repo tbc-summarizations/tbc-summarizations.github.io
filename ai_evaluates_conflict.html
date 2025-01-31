@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>an ai evaluates support of each country</title>
+  <style>
+    /* Reset some default styles */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #121212;
+      color: #e0e0e0;
+      margin: 20px;
+      line-height: 1.6;
+    }
+
+    h1 {
+      text-align: center;
+      color: #ffffff;
+      margin-bottom: 20px;
+    }
+
+    /* Search Box Styling */
+    #searchContainer {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    #searchBox {
+      width: 80%;
+      max-width: 400px;
+      padding: 10px 15px;
+      font-size: 16px;
+      border: none;
+      border-radius: 25px;
+      outline: none;
+      background-color: #1e1e1e;
+      color: #e0e0e0;
+      transition: background-color 0.3s ease;
+    }
+
+    #searchBox::placeholder {
+      color: #888;
+    }
+
+    #searchBox:focus {
+      background-color: #2c2c2c;
+    }
+
+    /* Continent Styling */
+    .continent {
+      background-color: #1e1e1e;
+      border: 1px solid #333;
+      border-radius: 8px;
+      margin-bottom: 15px;
+      overflow: hidden;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.5);
+      transition: transform 0.2s;
+    }
+
+    .continent:hover {
+      transform: scale(1.02);
+    }
+
+    .continent-header {
+      padding: 15px;
+      cursor: pointer;
+      background-color: #2c2c2c;
+      position: relative;
+      user-select: none;
+      font-size: 1.2em;
+      border-bottom: 1px solid #444;
+      transition: background-color 0.3s ease;
+    }
+
+    .continent-header:hover {
+      background-color: #3a3a3a;
+    }
+
+    .continent-header::after {
+      content: '\25BC';
+      position: absolute;
+      right: 20px;
+      transition: transform 0.3s ease;
+      color: #e0e0e0;
+    }
+
+    .continent-header.active::after {
+      transform: rotate(180deg);
+    }
+
+    .continent-content {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.5s ease, padding 0.3s ease;
+      padding: 0 15px;
+      background-color: #1e1e1e;
+    }
+
+    .continent-content.active {
+      max-height: 5000px; /* Large enough to accommodate content */
+      padding: 15px;
+    }
+
+    /* Country Styling */
+    .country {
+      border-top: 1px solid #333;
+    }
+
+    .country-header {
+      padding: 10px 20px;
+      cursor: pointer;
+      background-color: #2c2c2c;
+      position: relative;
+      user-select: none;
+      transition: background-color 0.3s ease;
+    }
+
+    .country-header:hover {
+      background-color: #3a3a3a;
+    }
+
+    .country-header::after {
+      content: '\25B6';
+      position: absolute;
+      right: 20px;
+      transition: transform 0.3s ease;
+      color: #e0e0e0;
+    }
+
+    .country-header.active::after {
+      transform: rotate(90deg);
+    }
+
+    .country-content {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.5s ease, padding 0.3s ease;
+      padding: 0 20px;
+      background-color: #1e1e1e;
+    }
+
+    .country-content.active {
+      max-height: 1000px; /* Large enough to accommodate content */
+      padding: 10px 20px;
+    }
+
+    .info {
+      margin: 5px 0;
+      padding: 10px;
+      background-color: #2c2c2c;
+      border-left: 4px solid #007BFF;
+      border-radius: 4px;
+    }
+
+    /* Scrollbar Styling */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: #1e1e1e;
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #555;
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #777;
+    }
+
+    /* Responsive Design */
+    @media (max-width: 600px) {
+      .continent-header, .country-header {
+        font-size: 1em;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>an ai evaluates support of each country</h1>
+  
+  <div id="searchContainer">
+    <input type="text" id="searchBox" placeholder="Search for a country...">
+  </div>
+  
+  <div id="dataContainer">
+    <!-- Formatted data will appear here -->
+  </div>
+  
+  <script>
+    // Placeholder JSON data with 2 countries per continent
+    const data = {
+  "North America": {
+    "United States": {"Israel": 70, "Palestine": 30, "info": "Govt strongly pro-Israel due to lobbying, military alliances, but public opinion shifting."},
+    "Canada": {"Israel": 65, "Palestine": 35, "info": "Govt favors Israel, but public sentiment is more divided."},
+    "Mexico": {"Israel": 45, "Palestine": 55, "info": "Neutral govt stance, but public leans slightly pro-Palestine."},
+    "Costa Rica": {"Israel": 50, "Palestine": 50, "info": "Balanced stance."},
+    "Panama": {"Israel": 60, "Palestine": 40, "info": "Pro-Israel stance."},
+    "Antigua and Barbuda": {"Israel": 55, "Palestine": 45, "info": "Minor diplomatic ties with Israel."},
+    "Bahamas": {"Israel": 60, "Palestine": 40, "info": "Aligns with U.S. policy."},
+    "Barbados": {"Israel": 55, "Palestine": 45, "info": "Minor Israeli relations."},
+    "Belize": {"Israel": 50, "Palestine": 50, "info": "Neutral stance."},
+    "Dominica": {"Israel": 55, "Palestine": 45, "info": "Pro-Israel leaning govt."},
+    "El Salvador": {"Israel": 60, "Palestine": 40, "info": "Historically pro-Israel due to diplomatic relations."},
+    "Grenada": {"Israel": 50, "Palestine": 50, "info": "Neutral stance, limited diplomatic ties."},
+    "Guatemala": {"Israel": 70, "Palestine": 30, "info": "Embassy in Jerusalem, strong pro-Israel stance."},
+    "Honduras": {"Israel": 65, "Palestine": 35, "info": "Pro-Israel, embassy moved to Jerusalem."},
+    "Nicaragua": {"Israel": 50, "Palestine": 50, "info": "Balanced stance."},
+    "Saint Kitts and Nevis": {"Israel": 55, "Palestine": 45, "info": "Minor diplomatic ties with Israel."},
+    "Saint Lucia": {"Israel": 55, "Palestine": 45, "info": "Pro-Israel leaning govt."},
+    "Saint Vincent and the Grenadines": {"Israel": 50, "Palestine": 50, "info": "Neutral, minor diplomatic ties."},
+    "Cuba": {"Israel": 15, "Palestine": 85, "info": "Govt is strongly pro-Palestine, no diplomatic ties with Israel."},
+    "Dominican Republic": {"Israel": 55, "Palestine": 45, "info": "Balanced stance, but public leans slightly pro-Palestine."},
+    "Jamaica": {"Israel": 50, "Palestine": 50, "info": "Neutral stance, diplomatic ties with both."},
+    "Trinidad & Tobago": {"Israel": 45, "Palestine": 55, "info": "Leans slightly pro-Palestine."},
+    "Haiti": {"Israel": 50, "Palestine": 50, "info": "Neutral stance, little political engagement on the issue."},
+    "Greenland": {"Israel": 50, "Palestine": 50, "info": "Follows Denmark’s policies, generally neutral."}
+  },
+  "South America": {
+    "Brazil": {"Israel": 40, "Palestine": 60, "info": "Govt stance varies by leadership, public opinion leans pro-Palestine."},
+    "Argentina": {"Israel": 55, "Palestine": 45, "info": "Large Jewish community, but public is divided."},
+    "Chile": {"Israel": 30, "Palestine": 70, "info": "Largest Palestinian diaspora outside the Middle East, strong pro-Palestine support."},
+    "Colombia": {"Israel": 65, "Palestine": 35, "info": "Strong security and military ties with Israel."},
+    "Venezuela": {"Israel": 20, "Palestine": 80, "info": "Govt is openly pro-Palestine, strong opposition to Israel."},
+    "Ecuador": {"Israel": 30, "Palestine": 70, "info": "Govt leans pro-Palestine, public supports Palestinian rights."},
+    "Peru": {"Israel": 30, "Palestine": 70, "info": "Similar stance to Ecuador, public favors Palestine."},
+    "Bolivia": {"Israel": 30, "Palestine": 70, "info": "Govt and public strongly favor Palestine."},
+    "Paraguay": {"Israel": 60, "Palestine": 40, "info": "Diplomatic ties favor Israel, but public is divided."},
+    "Uruguay": {"Israel": 60, "Palestine": 40, "info": "Generally follows Western alliances, but public opinion varies."},
+    "Guyana": {"Israel": 50, "Palestine": 50, "info": "Neutral."},
+    "Suriname": {"Israel": 50, "Palestine": 50, "info": "Neutral."}
+  },
+  "Europe": {
+    "United Kingdom": {"Israel": 60, "Palestine": 40, "info": "Govt leans pro-Israel, but public is more divided."},
+    "France": {"Israel": 55, "Palestine": 45, "info": "Strong Jewish community influences pro-Israel stance, but protests support Palestine."},
+    "Germany": {"Israel": 75, "Palestine": 25, "info": "Due to Holocaust history, strong diplomatic ties with Israel."},
+    "Spain": {"Israel": 40, "Palestine": 60, "info": "Left-wing support for Palestine, historical Arab ties."},
+    "Italy": {"Israel": 60, "Palestine": 40, "info": "Govt favors Israel, but public opinion is shifting."},
+    "Sweden": {"Israel": 30, "Palestine": 70, "info": "Govt recognized Palestine in 2014, strong public support."},
+    "Norway": {"Israel": 35, "Palestine": 65, "info": "Pro-Palestine stance, active in humanitarian aid."},
+    "Denmark": {"Israel": 45, "Palestine": 55, "info": "Public opinion leans pro-Palestine, but govt is more neutral."},
+    "Portugal": {"Israel": 50, "Palestine": 50, "info": "Balanced stance, shifting pro-Palestine in public opinion."},
+    "Greece": {"Israel": 45, "Palestine": 55, "info": "Leans slightly pro-Palestine due to history and politics."},
+    "Serbia": {"Israel": 40, "Palestine": 60, "info": "Pro-Palestine stance influenced by historical relations."},
+    "Austria": {"Israel": 75, "Palestine": 25, "info": "Govt aligns with Germany’s stance, strong Holocaust-related ties to Israel."},
+    "Hungary": {"Israel": 80, "Palestine": 20, "info": "Right-wing govt strongly pro-Israel, minimal public debate."},
+    "Czech Republic": {"Israel": 85, "Palestine": 15, "info": "One of Israel’s strongest allies in Europe."},
+    "Poland": {"Israel": 70, "Palestine": 30, "info": "Historical Jewish ties influence pro-Israel stance, public more divided."},
+    "Albania": {"Israel": 50, "Palestine": 50, "info": "Govt neutral, some historical ties with Israel."},
+    "Belarus": {"Israel": 40, "Palestine": 60, "info": "Govt maintains Israel ties but leans towards Russia, which supports Palestine."},
+    "Belgium": {"Israel": 45, "Palestine": 55, "info": "Public leans pro-Palestine, but govt more balanced."},
+    "Bosnia and Herzegovina": {"Israel": 40, "Palestine": 60, "info": "Muslim majority in Bosnia supports Palestine."},
+    "Bulgaria": {"Israel": 60, "Palestine": 40, "info": "Govt leans pro-Israel, historic Jewish ties."},
+    "Croatia": {"Israel": 55, "Palestine": 45, "info": "Govt pro-Israel, but public mixed."},
+    "Cyprus": {"Israel": 65, "Palestine": 35, "info": "Strategic energy cooperation with Israel."},
+    "Estonia": {"Israel": 60, "Palestine": 40, "info": "Strong Western alignment, supports Israel."},
+    "Finland": {"Israel": 40, "Palestine": 60, "info": "Public leans pro-Palestine, govt neutral."},
+    "Ireland": {"Israel": 35, "Palestine": 65, "info": "One of the strongest European pro-Palestine supporters."},
+    "Latvia": {"Israel": 60, "Palestine": 40, "info": "Govt pro-Israel, but limited public engagement."},
+    "Lithuania": {"Israel": 65, "Palestine": 35, "info": "Pro-Israel, historical Jewish ties."},
+    "Luxembourg": {"Israel": 50, "Palestine": 50, "info": "Balanced stance."},
+    "Malta": {"Israel": 40, "Palestine": 60, "info": "Historical Catholic-Arab ties favor Palestine."},
+    "Moldova": {"Israel": 55, "Palestine": 45, "info": "Govt favors Israel, but public less engaged."},
+    "Netherlands": {"Israel": 60, "Palestine": 40, "info": "Govt pro-Israel, but left-wing parties support Palestine."},
+    "North Macedonia": {"Israel": 50, "Palestine": 50, "info": "Balanced, minor Israeli economic ties."},
+    "Romania": {"Israel": 70, "Palestine": 30, "info": "One of Israel’s strongest allies in Eastern Europe."},
+    "Russia": {"Israel": 40, "Palestine": 60, "info": "Govt has relations with both but favors Palestine."},
+    "Slovakia": {"Israel": 70, "Palestine": 30, "info": "Pro-Israel govt, limited public debate."},
+    "Slovenia": {"Israel": 45, "Palestine": 55, "info": "Public pro-Palestine, govt more neutral."},
+    "Switzerland": {"Israel": 50, "Palestine": 50, "info": "Govt and public neutral."},
+    "Ukraine": {"Israel": 65, "Palestine": 35, "info": "Pro-Israel due to wartime alliances, but some neutrality."},
+    "Vatican City": {"Israel": 25, "Palestine": 75, "info": "Officially recognizes Palestine, promotes a two-state solution."},
+    "Andorra": {"Israel": 55, "Palestine": 45, "info": "Small state, follows European trends."},
+    "Liechtenstein": {"Israel": 60, "Palestine": 40, "info": "Similar to Switzerland, neutral but slightly pro-Israel."},
+    "Monaco": {"Israel": 65, "Palestine": 35, "info": "Govt aligns with France, pro-Israel policies."},
+    "San Marino": {"Israel": 55, "Palestine": 45, "info": "Neutral stance, aligns with EU policies."},
+    "Bhutan": {"Israel": 50, "Palestine": 50, "info": "Neutral stance, no strong diplomatic position."}
+  },
+  "Africa": {
+    "Egypt": {"Israel": 10, "Palestine": 90, "info": "Peace treaty with Israel, but public strongly pro-Palestine."},
+    "South Africa": {"Israel": 15, "Palestine": 85, "info": "Govt and public strongly support Palestine due to apartheid comparisons."},
+    "Algeria": {"Israel": 5, "Palestine": 95, "info": "No diplomatic ties, strong support for Palestine."},
+    "Morocco": {"Israel": 20, "Palestine": 80, "info": "Govt normalized ties, but public remains pro-Palestine."},
+    "Kenya": {"Israel": 40, "Palestine": 60, "info": "Balanced but leaning pro-Palestine among the public."},
+    "Tunisia": {"Israel": 5, "Palestine": 95, "info": "Strong public support for Palestine, no diplomatic ties with Israel."},
+    "Libya": {"Israel": 5, "Palestine": 95, "info": "No diplomatic ties, govt and public strongly pro-Palestine."},
+    "Sudan": {"Israel": 15, "Palestine": 85, "info": "Govt normalized relations with Israel under U.S. pressure, but public remains pro-Palestine."},
+    "Senegal": {"Israel": 30, "Palestine": 70, "info": "Muslim-majority country, govt is officially neutral but public leans pro-Palestine."},
+    "Ghana": {"Israel": 55, "Palestine": 45, "info": "Govt maintains ties with Israel, public is divided."},
+    "Mali": {"Israel": 10, "Palestine": 90, "info": "Muslim-majority country, historically pro-Palestine."},
+    "Ethiopia": {"Israel": 70, "Palestine": 30, "info": "Strong ties with Israel, large Ethiopian Jewish community."},
+    "Tanzania": {"Israel": 50, "Palestine": 50, "info": "Balanced stance, shifting towards pro-Palestine sentiment."},
+    "Uganda": {"Israel": 55, "Palestine": 45, "info": "Security ties with Israel, but some pro-Palestine activism."},
+    "Somalia": {"Israel": 5, "Palestine": 95, "info": "No diplomatic ties, overwhelmingly pro-Palestine."},
+    "Chad": {"Israel": 30, "Palestine": 70, "info": "Govt restored ties with Israel but public remains pro-Palestine."},
+    "Djibouti": {"Israel": 10, "Palestine": 90, "info": "No formal ties with Israel, strong pro-Palestine stance."},
+    "Namibia": {"Israel": 20, "Palestine": 80, "info": "Govt and public oppose Israel due to anti-colonial ties."},
+    "Zimbabwe": {"Israel": 25, "Palestine": 75, "info": "Similar to Namibia, pro-Palestine stance."},
+    "Angola": {"Israel": 40, "Palestine": 60, "info": "Balanced stance, pro-Palestine support among activists."},
+    "Botswana": {"Israel": 50, "Palestine": 50, "info": "Balanced stance, growing pro-Palestine activism."},
+    "Mauritania": {"Israel": 5, "Palestine": 95, "info": "No diplomatic ties, strong public opposition to Israel."},
+    "Eswatini (Swaziland)": {"Israel": 60, "Palestine": 40, "info": "One of the few African nations with strong Israeli ties."},
+    "Comoros": {"Israel": 10, "Palestine": 90, "info": "Muslim-majority, pro-Palestine government and public."},
+    "Nigeria": {"Israel": 40, "Palestine": 60, "info": "Muslim-majority north leans pro-Palestine, govt neutral."},
+    "Rwanda": {"Israel": 60, "Palestine": 40, "info": "Govt favors Israel due to diplomatic and tech cooperation."},
+    "Benin": {"Israel": 50, "Palestine": 50, "info": "Balanced, minor diplomatic relations with both."},
+    "Burkina Faso": {"Israel": 40, "Palestine": 60, "info": "Arab League influences public opinion."},
+    "Burundi": {"Israel": 55, "Palestine": 45, "info": "Govt favors Israel, public neutral."},
+    "Cabo Verde": {"Israel": 60, "Palestine": 40, "info": "Pro-Israel stance, small diplomatic presence."},
+    "Cameroon": {"Israel": 55, "Palestine": 45, "info": "Govt favors Israel, but limited public interest."},
+    "Central African Republic": {"Israel": 60, "Palestine": 40, "info": "Govt supports Israel."},
+    "Congo, Republic of the": {"Israel": 50, "Palestine": 50, "info": "Neutral, minor trade relations."},
+    "Congo, Democratic Republic of the": {"Israel": 55, "Palestine": 45, "info": "Govt has Israeli ties, but public neutral."},
+    "Côte d'Ivoire": {"Israel": 60, "Palestine": 40, "info": "Israeli investments drive policy."},
+    "Equatorial Guinea": {"Israel": 55, "Palestine": 45, "info": "Balanced, Israeli economic influence."},
+    "Eritrea": {"Israel": 40, "Palestine": 60, "info": "Anti-Israel stance due to Arab League ties."},
+    "Gabon": {"Israel": 50, "Palestine": 50, "info": "Neutral, maintains Israeli ties."},
+    "Gambia": {"Israel": 40, "Palestine": 60, "info": "Arab League alignment."},
+    "Guinea": {"Israel": 45, "Palestine": 55, "info": "Mixed stance, minor Israeli ties."},
+    "Guinea-Bissau": {"Israel": 50, "Palestine": 50, "info": "Neutral, minor relations with both."},
+    "Lesotho": {"Israel": 60, "Palestine": 40, "info": "Pro-Israel, minor diplomatic ties."},
+    "Liberia": {"Israel": 55, "Palestine": 45, "info": "Govt supports Israel."},
+    "Madagascar": {"Israel": 50, "Palestine": 50, "info": "Neutral."},
+    "Malawi": {"Israel": 55, "Palestine": 45, "info": "Strong Israeli diplomatic ties."},
+    "Mauritius": {"Israel": 40, "Palestine": 60, "info": "Arab League influence."},
+    "Mozambique": {"Israel": 50, "Palestine": 50, "info": "Neutral."},
+    "Niger": {"Israel": 40, "Palestine": 60, "info": "Strong pro-Palestine stance."},
+    "São Tomé and Príncipe": {"Israel": 60, "Palestine": 40, "info": "Minor Israeli relations."},
+    "Seychelles": {"Israel": 55, "Palestine": 45, "info": "Balanced stance."},
+    "Sierra Leone": {"Israel": 50, "Palestine": 50, "info": "Neutral."},
+    "South Sudan": {"Israel": 70, "Palestine": 30, "info": "Israel backed South Sudan's independence."},
+    "Togo": {"Israel": 65, "Palestine": 35, "info": "Pro-Israel govt."},
+    "Zambia": {"Israel": 55, "Palestine": 45, "info": "Israeli investment influence."}
+  },
+  "Asia": {
+    "China": {"Israel": 50, "Palestine": 50, "info": "Maintains strong economic ties with both, officially neutral."},
+    "India": {"Israel": 65, "Palestine": 35, "info": "Govt favors Israel due to security cooperation, public more mixed."},
+    "Indonesia": {"Israel": 10, "Palestine": 90, "info": "Strong Muslim solidarity, no diplomatic ties with Israel."},
+    "Pakistan": {"Israel": 5, "Palestine": 95, "info": "Strong anti-Israel sentiment, no diplomatic ties."},
+    "Bangladesh": {"Israel": 5, "Palestine": 95, "info": "No diplomatic ties, strong pro-Palestine stance."},
+    "Nepal": {"Israel": 60, "Palestine": 40, "info": "Govt maintains ties with Israel, but some pro-Palestine activism."},
+    "Sri Lanka": {"Israel": 70, "Palestine": 30, "info": "Govt balances ties with both, but pro-Palestine sentiment is rising."},
+    "Kazakhstan": {"Israel": 40, "Palestine": 60, "info": "Muslim-majority nation, diplomatic ties with Israel but public is pro-Palestine."},
+    "Uzbekistan": {"Israel": 50, "Palestine": 50, "info": "Govt is neutral, public leans slightly pro-Palestine."},
+    "Azerbaijan": {"Israel": 80, "Palestine": 20, "info": "Strong military and economic ties with Israel."},
+    "Armenia": {"Israel": 25, "Palestine": 75, "info": "Pro-Palestine stance, tensions with Israel due to Israel-Azerbaijan relations."},
+    "Georgia": {"Israel": 70, "Palestine": 30, "info": "Strong economic ties with Israel, limited public debate."},
+    "Iran": {"Israel": 5, "Palestine": 95, "info": "Strong anti-Israel govt, supports Palestinian groups."},
+    "Iraq": {"Israel": 5, "Palestine": 95, "info": "No diplomatic ties, strong anti-Israel sentiment."},
+    "Jordan": {"Israel": 15, "Palestine": 85, "info": "Peace treaty with Israel, but public strongly pro-Palestine."},
+    "Kuwait": {"Israel": 10, "Palestine": 90, "info": "Strong anti-Israel stance, no diplomatic ties."},
+    "Lebanon": {"Israel": 5, "Palestine": 95, "info": "Strong Hezbollah influence, no diplomatic ties with Israel."},
+    "Maldives": {"Israel": 10, "Palestine": 90, "info": "Strong Muslim solidarity, no diplomatic ties with Israel."},
+    "Mongolia": {"Israel": 50, "Palestine": 50, "info": "Neutral, limited diplomatic activity."},
+    "Myanmar (Burma)": {"Israel": 60, "Palestine": 40, "info": "Military cooperation with Israel."},
+    "North Korea": {"Israel": 5, "Palestine": 95, "info": "No diplomatic ties, anti-Israel propaganda."},
+    "Oman": {"Israel": 50, "Palestine": 50, "info": "Neutral, unofficial ties with Israel but public leans pro-Palestine."},
+    "Qatar": {"Israel": 40, "Palestine": 60, "info": "Supports Hamas politically but trades with Israel."},
+    "Saudi Arabia": {"Israel": 20, "Palestine": 80, "info": "Govt warming ties with Israel, but public remains strongly pro-Palestine."},
+    "Syria": {"Israel": 5, "Palestine": 95, "info": "No diplomatic ties, ongoing conflict with Israel."},
+    "Taiwan": {"Israel": 55, "Palestine": 45, "info": "Pro-Israel stance, U.S. influence."},
+    "Tajikistan": {"Israel": 40, "Palestine": 60, "info": "Muslim-majority country, but govt is neutral."},
+    "Thailand": {"Israel": 60, "Palestine": 40, "info": "Govt maintains strong diplomatic and military ties with Israel."},
+    "Timor-Leste": {"Israel": 50, "Palestine": 50, "info": "Neutral stance, limited relations."},
+    "Turkmenistan": {"Israel": 45, "Palestine": 55, "info": "Balanced, minor economic ties with Israel."},
+    "United Arab Emirates": {"Israel": 50, "Palestine": 50, "info": "Normalized ties with Israel, but public is mostly pro-Palestine."},
+    "Yemen": {"Israel": 5, "Palestine": 95, "info": "No diplomatic ties, strong anti-Israel sentiment."},
+    "Japan": {"Israel": 60, "Palestine": 40, "info": "Pro-Israel govt, public neutral."},
+    "Malaysia": {"Israel": 5, "Palestine": 95, "info": "No diplomatic ties, pro-Palestine govt & public."},
+    "Singapore": {"Israel": 65, "Palestine": 35, "info": "Pro-Israel govt, public neutral."},
+    "South Korea": {"Israel": 60, "Palestine": 40, "info": "Pro-Israel, strong U.S. influence."},
+    "Turkey": {"Israel": 30, "Palestine": 70, "info": "Govt and public pro-Palestine, but trade with Israel."},
+    "Bhutan": {"Israel": 50, "Palestine": 50, "info": "Neutral stance, no strong diplomatic position."}
+  },
+  "Oceania": {
+    "Australia": {"Israel": 65, "Palestine": 35, "info": "Govt favors Israel, but public sentiment is shifting."},
+    "New Zealand": {"Israel": 45, "Palestine": 55, "info": "More neutral govt stance, but public leans pro-Palestine."},
+    "Papua New Guinea": {"Israel": 70, "Palestine": 30, "info": "Govt favors Israel, but public mostly neutral."},
+    "Fiji": {"Israel": 60, "Palestine": 40, "info": "Govt aligns with Western stance, but pro-Palestine sentiment is growing."},
+    "Samoa": {"Israel": 55, "Palestine": 45, "info": "Govt supports Israel but public opinion is mixed."},
+    "Tonga": {"Israel": 50, "Palestine": 50, "info": "Neutral stance, follows global diplomatic trends."},
+    "Vanuatu": {"Israel": 55, "Palestine": 45, "info": "Govt has ties with Israel, public is neutral."},
+    "Solomon Islands": {"Israel": 60, "Palestine": 40, "info": "Similar to Fiji, govt leans pro-Israel."},
+    "Micronesia": {"Israel": 85, "Palestine": 15, "info": "One of Israel’s strongest allies in UN votes."},
+    "Palau": {"Israel": 80, "Palestine": 20, "info": "Similar to Micronesia, strong diplomatic ties with Israel."},
+    "Marshall Islands": {"Israel": 85, "Palestine": 15, "info": "Consistently votes pro-Israel at the UN."},
+    "Kiribati": {"Israel": 55, "Palestine": 45, "info": "Minor diplomatic ties."},
+    "Nauru": {"Israel": 60, "Palestine": 40, "info": "Aligned with U.S. stance."},
+    "Tuvalu": {"Israel": 55, "Palestine": 45, "info": "Neutral but minor Israeli relations."}
+  }
+    };
+
+    // Function to create and append elements
+    function createElement(tag, className, textContent) {
+      const element = document.createElement(tag);
+      if (className) element.className = className;
+      if (textContent) element.textContent = textContent;
+      return element;
+    }
+
+    // Function to render the data
+    function renderData(data) {
+      const container = document.getElementById('dataContainer');
+      container.innerHTML = ''; // Clear any existing content
+
+      for (const continent in data) {
+        // Create Continent Container
+        const continentDiv = createElement('div', 'continent');
+
+        // Create Continent Header
+        const continentHeader = createElement('div', 'continent-header', continent);
+        continentDiv.appendChild(continentHeader);
+
+        // Create Continent Content
+        const continentContent = createElement('div', 'continent-content');
+        continentDiv.appendChild(continentContent);
+
+        // Iterate through countries in the continent
+        const countries = data[continent];
+        for (const country in countries) {
+          const countryData = countries[country];
+
+          // Create Country Container
+          const countryDiv = createElement('div', 'country');
+
+          // Create Country Header
+          const countryHeader = createElement('div', 'country-header', country);
+          countryDiv.appendChild(countryHeader);
+
+          // Create Country Content
+          const countryContent = createElement('div', 'country-content');
+
+          // Create Info Div
+          const infoDiv = createElement('div', 'info');
+          infoDiv.innerHTML = `<strong>Israel:</strong> ${countryData["Israel"]}%<br>
+                               <strong>Palestine:</strong> ${countryData["Palestine"]}%<br>
+                               ${countryData["info"]}`;
+          countryContent.appendChild(infoDiv);
+          countryDiv.appendChild(countryContent);
+          continentContent.appendChild(countryDiv);
+
+          // Toggle Country Content on Click
+          countryHeader.addEventListener('click', function() {
+            this.classList.toggle('active');
+            countryContent.classList.toggle('active');
+          });
+        }
+
+        container.appendChild(continentDiv);
+
+        // Toggle Continent Content on Click
+        continentHeader.addEventListener('click', function() {
+          this.classList.toggle('active');
+          continentContent.classList.toggle('active');
+        });
+      }
+    }
+
+    // Function to handle search
+    function handleSearch() {
+      const query = document.getElementById('searchBox').value.toLowerCase();
+      const continents = document.querySelectorAll('.continent');
+
+      continents.forEach(continent => {
+        const continentHeader = continent.querySelector('.continent-header');
+        const countries = continent.querySelectorAll('.country');
+
+        let continentHasMatch = false;
+
+        countries.forEach(country => {
+          const countryHeader = country.querySelector('.country-header');
+          const countryName = countryHeader.textContent.toLowerCase();
+
+          if (countryName.includes(query)) {
+            country.style.display = '';
+            continentHasMatch = true;
+          } else {
+            country.style.display = 'none';
+          }
+        });
+
+        if (continentHasMatch) {
+          continent.style.display = '';
+        } else {
+          continent.style.display = 'none';
+        }
+      });
+    }
+
+    // Initialize and render data on page load
+    document.addEventListener('DOMContentLoaded', function() {
+      renderData(data);
+
+      // Attach search event listener
+      document.getElementById('searchBox').addEventListener('input', handleSearch);
+    });
+  </script>
+</body>
+</html>
