@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>public opinion</title>
+  <style>
+    /* Reset some default styles */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #121212;
+      color: #e0e0e0;
+      margin: 20px;
+      line-height: 1.6;
+    }
+
+    h1 {
+      text-align: center;
+      color: #ffffff;
+      margin-bottom: 20px;
+    }
+
+    /* Search Box Styling */
+    #searchContainer {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    #searchBox {
+      width: 80%;
+      max-width: 400px;
+      padding: 10px 15px;
+      font-size: 16px;
+      border: none;
+      border-radius: 25px;
+      outline: none;
+      background-color: #1e1e1e;
+      color: #e0e0e0;
+      transition: background-color 0.3s ease;
+    }
+
+    #searchBox::placeholder {
+      color: #888;
+    }
+
+    #searchBox:focus {
+      background-color: #2c2c2c;
+    }
+
+    /* Continent Styling */
+    .continent {
+      background-color: #1e1e1e;
+      border: 1px solid #333;
+      border-radius: 8px;
+      margin-bottom: 15px;
+      overflow: hidden;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.5);
+      transition: transform 0.2s;
+    }
+
+    .continent:hover {
+      transform: scale(1.02);
+    }
+
+    .continent-header {
+      padding: 15px;
+      cursor: pointer;
+      background-color: #2c2c2c;
+      position: relative;
+      user-select: none;
+      font-size: 1.2em;
+      border-bottom: 1px solid #444;
+      transition: background-color 0.3s ease;
+    }
+
+    .continent-header:hover {
+      background-color: #3a3a3a;
+    }
+
+    .continent-header::after {
+      content: '\25BC';
+      position: absolute;
+      right: 20px;
+      transition: transform 0.3s ease;
+      color: #e0e0e0;
+    }
+
+    .continent-header.active::after {
+      transform: rotate(180deg);
+    }
+
+    .continent-content {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.5s ease, padding 0.3s ease;
+      padding: 0 15px;
+      background-color: #1e1e1e;
+    }
+
+    .continent-content.active {
+      max-height: 5000px; /* Large enough to accommodate content */
+      padding: 15px;
+    }
+
+    /* Country Styling */
+    .country {
+      border-top: 1px solid #333;
+    }
+
+    .country-header {
+      padding: 10px 20px;
+      cursor: pointer;
+      background-color: #2c2c2c;
+      position: relative;
+      user-select: none;
+      transition: background-color 0.3s ease;
+    }
+
+    .country-header:hover {
+      background-color: #3a3a3a;
+    }
+
+    .country-header::after {
+      content: '\25B6';
+      position: absolute;
+      right: 20px;
+      transition: transform 0.3s ease;
+      color: #e0e0e0;
+    }
+
+    .country-header.active::after {
+      transform: rotate(90deg);
+    }
+
+    .country-content {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.5s ease, padding 0.3s ease;
+      padding: 0 20px;
+      background-color: #1e1e1e;
+    }
+
+    .country-content.active {
+      max-height: 1000px; /* Large enough to accommodate content */
+      padding: 10px 20px;
+    }
+
+    .info {
+      margin: 5px 0;
+      padding: 10px;
+      background-color: #2c2c2c;
+      border-left: 4px solid #007BFF;
+      border-radius: 4px;
+    }
+
+    /* Scrollbar Styling */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: #1e1e1e;
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #555;
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #777;
+    }
+
+    /* Responsive Design */
+    @media (max-width: 600px) {
+      .continent-header, .country-header {
+        font-size: 1em;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>an ai evaluates public opinion</h1>
+  
+  <div id="searchContainer">
+    <input type="text" id="searchBox" placeholder="Search for a country...">
+  </div>
+  
+  <div id="dataContainer">
+    <!-- Formatted data will appear here -->
+  </div>
+  
+  <script>
+    // Placeholder JSON data with 2 countries per continent
+    const data = {
+  "North America": {
+    "United States": {"Israel": 55, "Palestine": 45, "info": "Public opinion is increasingly divided, with significant support for both Israel and Palestine."},
+    "Canada": {"Israel": 50, "Palestine": 50, "info": "Public sentiment is evenly split between supporting Israel and Palestine."},
+    "Mexico": {"Israel": 40, "Palestine": 60, "info": "Public opinion leans more towards supporting Palestine."},
+    "Costa Rica": {"Israel": 50, "Palestine": 50, "info": "Public opinion is balanced with no significant majority for either side."},
+    "Panama": {"Israel": 55, "Palestine": 45, "info": "Slight public preference towards supporting Israel."},
+    "Antigua and Barbuda": {"Israel": 50, "Palestine": 50, "info": "Public opinion remains neutral with equal support for both."},
+    "Bahamas": {"Israel": 50, "Palestine": 50, "info": "Public sentiment is evenly divided."},
+    "Barbados": {"Israel": 50, "Palestine": 50, "info": "Public opinion remains neutral."},
+    "Belize": {"Israel": 50, "Palestine": 50, "info": "Public sentiment is balanced."},
+    "Dominica": {"Israel": 50, "Palestine": 50, "info": "Public opinion shows no significant bias."},
+    "El Salvador": {"Israel": 50, "Palestine": 50, "info": "Public opinion is evenly split."},
+    "Grenada": {"Israel": 50, "Palestine": 50, "info": "Public sentiment remains neutral."},
+    "Guatemala": {"Israel": 45, "Palestine": 55, "info": "Public opinion leans slightly towards supporting Palestine."},
+    "Honduras": {"Israel": 50, "Palestine": 50, "info": "Public sentiment is balanced."},
+    "Nicaragua": {"Israel": 50, "Palestine": 50, "info": "Public opinion remains neutral."},
+    "Saint Kitts and Nevis": {"Israel": 50, "Palestine": 50, "info": "Public sentiment is evenly divided."},
+    "Saint Lucia": {"Israel": 50, "Palestine": 50, "info": "Public opinion shows no significant bias."},
+    "Saint Vincent and the Grenadines": {"Israel": 50, "Palestine": 50, "info": "Public sentiment remains neutral."},
+    "Cuba": {"Israel": 20, "Palestine": 80, "info": "Public opinion strongly supports Palestine."},
+    "Dominican Republic": {"Israel": 45, "Palestine": 55, "info": "Public opinion leans slightly towards supporting Palestine."},
+    "Jamaica": {"Israel": 50, "Palestine": 50, "info": "Public sentiment is balanced with no significant majority."},
+    "Trinidad & Tobago": {"Israel": 40, "Palestine": 60, "info": "Public opinion leans more towards supporting Palestine."},
+    "Haiti": {"Israel": 50, "Palestine": 50, "info": "Public sentiment remains neutral."},
+    "Greenland": {"Israel": 50, "Palestine": 50, "info": "Public opinion is balanced, following Denmark’s neutral stance."}
+  },
+  "South America": {
+    "Brazil": {"Israel": 35, "Palestine": 65, "info": "Public opinion strongly favors supporting Palestine."},
+    "Argentina": {"Israel": 50, "Palestine": 50, "info": "Public sentiment is evenly split between supporting Israel and Palestine."},
+    "Chile": {"Israel": 25, "Palestine": 75, "info": "Public opinion strongly supports Palestine."},
+    "Colombia": {"Israel": 45, "Palestine": 55, "info": "Public opinion leans slightly towards supporting Palestine."},
+    "Venezuela": {"Israel": 10, "Palestine": 90, "info": "Public opinion overwhelmingly supports Palestine."},
+    "Ecuador": {"Israel": 25, "Palestine": 75, "info": "Public sentiment strongly favors Palestine."},
+    "Peru": {"Israel": 25, "Palestine": 75, "info": "Public opinion strongly supports Palestine."},
+    "Bolivia": {"Israel": 25, "Palestine": 75, "info": "Public sentiment strongly favors Palestine."},
+    "Paraguay": {"Israel": 40, "Palestine": 60, "info": "Public opinion leans towards supporting Palestine."},
+    "Uruguay": {"Israel": 40, "Palestine": 60, "info": "Public opinion favors supporting Palestine."},
+    "Guyana": {"Israel": 50, "Palestine": 50, "info": "Public sentiment is balanced."},
+    "Suriname": {"Israel": 50, "Palestine": 50, "info": "Public opinion remains neutral."}
+  },
+  "Europe": {
+    "United Kingdom": {"Israel": 55, "Palestine": 45, "info": "Public opinion is increasingly supportive of Palestine."},
+    "France": {"Israel": 50, "Palestine": 50, "info": "Public sentiment is evenly split with growing support for Palestine."},
+    "Germany": {"Israel": 60, "Palestine": 40, "info": "Public opinion generally supports Israel, influenced by historical factors."},
+    "Spain": {"Israel": 35, "Palestine": 65, "info": "Public opinion strongly favors supporting Palestine."},
+    "Italy": {"Israel": 55, "Palestine": 45, "info": "Public opinion is moderately supportive of Israel with growing support for Palestine."},
+    "Sweden": {"Israel": 20, "Palestine": 80, "info": "Public opinion overwhelmingly supports Palestine."},
+    "Norway": {"Israel": 25, "Palestine": 75, "info": "Public sentiment strongly favors supporting Palestine."},
+    "Denmark": {"Israel": 35, "Palestine": 65, "info": "Public opinion leans significantly towards supporting Palestine."},
+    "Portugal": {"Israel": 45, "Palestine": 55, "info": "Public opinion is leaning towards supporting Palestine."},
+    "Greece": {"Israel": 35, "Palestine": 65, "info": "Public sentiment strongly favors supporting Palestine."},
+    "Serbia": {"Israel": 30, "Palestine": 70, "info": "Public opinion strongly supports Palestine."},
+    "Austria": {"Israel": 60, "Palestine": 40, "info": "Public opinion generally supports Israel, influenced by historical factors."},
+    "Hungary": {"Israel": 65, "Palestine": 35, "info": "Public sentiment leans towards supporting Israel."},
+    "Czech Republic": {"Israel": 70, "Palestine": 30, "info": "Public opinion strongly supports Israel."},
+    "Poland": {"Israel": 60, "Palestine": 40, "info": "Public sentiment leans towards supporting Israel."},
+    "Albania": {"Israel": 50, "Palestine": 50, "info": "Public opinion remains balanced."},
+    "Belarus": {"Israel": 35, "Palestine": 65, "info": "Public opinion strongly favors supporting Palestine."},
+    "Belgium": {"Israel": 40, "Palestine": 60, "info": "Public opinion leans towards supporting Palestine."},
+    "Bosnia and Herzegovina": {"Israel": 30, "Palestine": 70, "info": "Public sentiment strongly favors supporting Palestine."},
+    "Bulgaria": {"Israel": 50, "Palestine": 50, "info": "Public opinion is evenly split."},
+    "Croatia": {"Israel": 45, "Palestine": 55, "info": "Public sentiment leans towards supporting Palestine."},
+    "Cyprus": {"Israel": 55, "Palestine": 45, "info": "Public opinion moderately supports Israel."},
+    "Estonia": {"Israel": 55, "Palestine": 45, "info": "Public sentiment moderately supports Israel."},
+    "Finland": {"Israel": 35, "Palestine": 65, "info": "Public opinion strongly favors supporting Palestine."},
+    "Ireland": {"Israel": 25, "Palestine": 75, "info": "Public sentiment overwhelmingly supports Palestine."},
+    "Latvia": {"Israel": 55, "Palestine": 45, "info": "Public opinion moderately supports Israel."},
+    "Lithuania": {"Israel": 60, "Palestine": 40, "info": "Public sentiment leans towards supporting Israel."},
+    "Luxembourg": {"Israel": 50, "Palestine": 50, "info": "Public opinion remains balanced."},
+    "Malta": {"Israel": 30, "Palestine": 70, "info": "Public opinion strongly favors supporting Palestine."},
+    "Moldova": {"Israel": 50, "Palestine": 50, "info": "Public sentiment is evenly split."},
+    "Netherlands": {"Israel": 55, "Palestine": 45, "info": "Public opinion moderately supports Israel."},
+    "North Macedonia": {"Israel": 50, "Palestine": 50, "info": "Public sentiment remains neutral."},
+    "Romania": {"Israel": 60, "Palestine": 40, "info": "Public opinion leans towards supporting Israel."},
+    "Russia": {"Israel": 35, "Palestine": 65, "info": "Public sentiment strongly favors supporting Palestine."},
+    "Slovakia": {"Israel": 60, "Palestine": 40, "info": "Public opinion leans towards supporting Israel."},
+    "Slovenia": {"Israel": 40, "Palestine": 60, "info": "Public sentiment leans towards supporting Palestine."},
+    "Switzerland": {"Israel": 50, "Palestine": 50, "info": "Public opinion remains balanced."},
+    "Ukraine": {"Israel": 55, "Palestine": 45, "info": "Public sentiment moderately supports Israel."},
+    "Vatican City": {"Israel": 20, "Palestine": 80, "info": "Public opinion strongly supports Palestine."},
+    "Andorra": {"Israel": 50, "Palestine": 50, "info": "Public sentiment remains neutral."},
+    "Liechtenstein": {"Israel": 55, "Palestine": 45, "info": "Public opinion moderately supports Israel."},
+    "Monaco": {"Israel": 60, "Palestine": 40, "info": "Public sentiment leans towards supporting Israel."},
+    "San Marino": {"Israel": 50, "Palestine": 50, "info": "Public opinion remains balanced."},
+    "Bhutan": {"Israel": 50, "Palestine": 50, "info": "Public sentiment is neutral."}
+  },
+  "Africa": {
+    "Egypt": {"Israel": 15, "Palestine": 85, "info": "Public opinion strongly supports Palestine."},
+    "South Africa": {"Israel": 20, "Palestine": 80, "info": "Public sentiment overwhelmingly supports Palestine."},
+    "Algeria": {"Israel": 5, "Palestine": 95, "info": "Public opinion almost exclusively supports Palestine."},
+    "Morocco": {"Israel": 25, "Palestine": 75, "info": "Public sentiment strongly favors supporting Palestine."},
+    "Kenya": {"Israel": 35, "Palestine": 65, "info": "Public opinion leans towards supporting Palestine."},
+    "Tunisia": {"Israel": 5, "Palestine": 95, "info": "Public opinion overwhelmingly supports Palestine."},
+    "Libya": {"Israel": 5, "Palestine": 95, "info": "Public sentiment almost exclusively supports Palestine."},
+    "Sudan": {"Israel": 20, "Palestine": 80, "info": "Public opinion strongly favors supporting Palestine."},
+    "Senegal": {"Israel": 30, "Palestine": 70, "info": "Public sentiment leans towards supporting Palestine."},
+    "Ghana": {"Israel": 50, "Palestine": 50, "info": "Public opinion is evenly split."},
+    "Mali": {"Israel": 10, "Palestine": 90, "info": "Public opinion overwhelmingly supports Palestine."},
+    "Ethiopia": {"Israel": 50, "Palestine": 50, "info": "Public sentiment is balanced."},
+    "Tanzania": {"Israel": 45, "Palestine": 55, "info": "Public opinion slightly favors supporting Palestine."},
+    "Uganda": {"Israel": 50, "Palestine": 50, "info": "Public sentiment is evenly split."},
+    "Somalia": {"Israel": 5, "Palestine": 95, "info": "Public opinion overwhelmingly supports Palestine."},
+    "Chad": {"Israel": 35, "Palestine": 65, "info": "Public sentiment leans towards supporting Palestine."},
+    "Djibouti": {"Israel": 10, "Palestine": 90, "info": "Public opinion strongly favors supporting Palestine."},
+    "Namibia": {"Israel": 25, "Palestine": 75, "info": "Public sentiment strongly supports Palestine."},
+    "Zimbabwe": {"Israel": 30, "Palestine": 70, "info": "Public opinion strongly favors supporting Palestine."},
+    "Angola": {"Israel": 40, "Palestine": 60, "info": "Public sentiment leans towards supporting Palestine."},
+    "Botswana": {"Israel": 50, "Palestine": 50, "info": "Public opinion remains balanced."},
+    "Mauritania": {"Israel": 5, "Palestine": 95, "info": "Public opinion overwhelmingly supports Palestine."},
+    "Eswatini (Swaziland)": {"Israel": 55, "Palestine": 45, "info": "Public sentiment moderately supports Israel."},
+    "Comoros": {"Israel": 10, "Palestine": 90, "info": "Public opinion strongly favors supporting Palestine."},
+    "Nigeria": {"Israel": 35, "Palestine": 65, "info": "Public sentiment leans towards supporting Palestine."},
+    "Rwanda": {"Israel": 55, "Palestine": 45, "info": "Public opinion moderately supports Israel."},
+    "Benin": {"Israel": 50, "Palestine": 50, "info": "Public sentiment remains balanced."},
+    "Burkina Faso": {"Israel": 35, "Palestine": 65, "info": "Public opinion leans towards supporting Palestine."},
+    "Burundi": {"Israel": 50, "Palestine": 50, "info": "Public sentiment is evenly split."},
+    "Cabo Verde": {"Israel": 55, "Palestine": 45, "info": "Public opinion moderately supports Israel."},
+    "Cameroon": {"Israel": 50, "Palestine": 50, "info": "Public sentiment remains balanced."},
+    "Central African Republic": {"Israel": 55, "Palestine": 45, "info": "Public opinion moderately supports Israel."},
+    "Congo, Republic of the": {"Israel": 50, "Palestine": 50, "info": "Public sentiment is evenly split."},
+    "Congo, Democratic Republic of the": {"Israel": 50, "Palestine": 50, "info": "Public opinion remains balanced."},
+    "Côte d'Ivoire": {"Israel": 55, "Palestine": 45, "info": "Public sentiment moderately supports Israel."},
+    "Equatorial Guinea": {"Israel": 50, "Palestine": 50, "info": "Public opinion remains balanced."},
+    "Eritrea": {"Israel": 25, "Palestine": 75, "info": "Public sentiment strongly favors supporting Palestine."},
+    "Gabon": {"Israel": 50, "Palestine": 50, "info": "Public opinion remains balanced."},
+    "Gambia": {"Israel": 30, "Palestine": 70, "info": "Public sentiment strongly favors supporting Palestine."},
+    "Guinea": {"Israel": 35, "Palestine": 65, "info": "Public opinion leans towards supporting Palestine."},
+    "Guinea-Bissau": {"Israel": 50, "Palestine": 50, "info": "Public sentiment remains balanced."},
+    "Lesotho": {"Israel": 55, "Palestine": 45, "info": "Public opinion moderately supports Israel."},
+    "Liberia": {"Israel": 50, "Palestine": 50, "info": "Public sentiment is evenly split."},
+    "Madagascar": {"Israel": 50, "Palestine": 50, "info": "Public opinion remains neutral."},
+    "Malawi": {"Israel": 55, "Palestine": 45, "info": "Public sentiment moderately supports Israel."},
+    "Mauritius": {"Israel": 10, "Palestine": 90, "info": "Public opinion overwhelmingly supports Palestine."},
+    "Mozambique": {"Israel": 50, "Palestine": 50, "info": "Public sentiment remains balanced."},
+    "Niger": {"Israel": 35, "Palestine": 65, "info": "Public opinion strongly favors supporting Palestine."},
+    "São Tomé and Príncipe": {"Israel": 55, "Palestine": 45, "info": "Public opinion moderately supports Israel."},
+    "Seychelles": {"Israel": 50, "Palestine": 50, "info": "Public sentiment remains balanced."},
+    "Sierra Leone": {"Israel": 50, "Palestine": 50, "info": "Public opinion remains neutral."},
+    "South Sudan": {"Israel": 60, "Palestine": 40, "info": "Public sentiment moderately supports Israel."},
+    "Togo": {"Israel": 60, "Palestine": 40, "info": "Public opinion leans towards supporting Israel."},
+    "Zambia": {"Israel": 50, "Palestine": 50, "info": "Public sentiment remains balanced."}
+  },
+  "Asia": {
+    "China": {"Israel": 50, "Palestine": 50, "info": "Public opinion is evenly split with balanced views towards both."},
+    "India": {"Israel": 55, "Palestine": 45, "info": "Public sentiment moderately supports Israel."},
+    "Indonesia": {"Israel": 10, "Palestine": 90, "info": "Public opinion overwhelmingly supports Palestine."},
+    "Pakistan": {"Israel": 5, "Palestine": 95, "info": "Public opinion almost exclusively supports Palestine."},
+    "Bangladesh": {"Israel": 5, "Palestine": 95, "info": "Public sentiment overwhelmingly favors Palestine."},
+    "Nepal": {"Israel": 50, "Palestine": 50, "info": "Public opinion remains balanced."},
+    "Sri Lanka": {"Israel": 55, "Palestine": 45, "info": "Public sentiment moderately supports Israel."},
+    "Kazakhstan": {"Israel": 35, "Palestine": 65, "info": "Public opinion leans towards supporting Palestine."},
+    "Uzbekistan": {"Israel": 50, "Palestine": 50, "info": "Public sentiment remains balanced with slight support for Palestine."},
+    "Azerbaijan": {"Israel": 70, "Palestine": 30, "info": "Public opinion strongly supports Israel."},
+    "Armenia": {"Israel": 20, "Palestine": 80, "info": "Public sentiment strongly favors supporting Palestine."},
+    "Georgia": {"Israel": 60, "Palestine": 40, "info": "Public opinion moderately supports Israel."},
+    "Iran": {"Israel": 5, "Palestine": 95, "info": "Public sentiment overwhelmingly supports Palestine."},
+    "Iraq": {"Israel": 5, "Palestine": 95, "info": "Public opinion almost exclusively supports Palestine."},
+    "Jordan": {"Israel": 20, "Palestine": 80, "info": "Public sentiment strongly favors supporting Palestine."},
+    "Kuwait": {"Israel": 10, "Palestine": 90, "info": "Public opinion overwhelmingly supports Palestine."},
+    "Lebanon": {"Israel": 5, "Palestine": 95, "info": "Public sentiment overwhelmingly favors supporting Palestine."},
+    "Maldives": {"Israel": 10, "Palestine": 90, "info": "Public opinion strongly supports Palestine."},
+    "Mongolia": {"Israel": 50, "Palestine": 50, "info": "Public sentiment remains balanced."},
+    "Myanmar (Burma)": {"Israel": 55, "Palestine": 45, "info": "Public opinion moderately supports Israel."},
+    "North Korea": {"Israel": 5, "Palestine": 95, "info": "Public opinion overwhelmingly supports Palestine."},
+    "Oman": {"Israel": 45, "Palestine": 55, "info": "Public sentiment slightly favors supporting Palestine."},
+    "Qatar": {"Israel": 35, "Palestine": 65, "info": "Public opinion leans towards supporting Palestine."},
+    "Saudi Arabia": {"Israel": 20, "Palestine": 80, "info": "Public sentiment strongly favors supporting Palestine."},
+    "Syria": {"Israel": 5, "Palestine": 95, "info": "Public opinion overwhelmingly supports Palestine."},
+    "Taiwan": {"Israel": 55, "Palestine": 45, "info": "Public sentiment moderately supports Israel."},
+    "Tajikistan": {"Israel": 35, "Palestine": 65, "info": "Public opinion leans towards supporting Palestine."},
+    "Thailand": {"Israel": 55, "Palestine": 45, "info": "Public sentiment moderately supports Israel."},
+    "Timor-Leste": {"Israel": 50, "Palestine": 50, "info": "Public opinion remains neutral."},
+    "Turkmenistan": {"Israel": 40, "Palestine": 60, "info": "Public sentiment leans towards supporting Palestine."},
+    "United Arab Emirates": {"Israel": 50, "Palestine": 50, "info": "Public opinion is evenly split."},
+    "Yemen": {"Israel": 5, "Palestine": 95, "info": "Public sentiment overwhelmingly supports Palestine."},
+    "Japan": {"Israel": 55, "Palestine": 45, "info": "Public opinion moderately supports Israel."},
+    "Malaysia": {"Israel": 5, "Palestine": 95, "info": "Public sentiment overwhelmingly favors Palestine."},
+    "Singapore": {"Israel": 60, "Palestine": 40, "info": "Public opinion moderately supports Israel."},
+    "South Korea": {"Israel": 55, "Palestine": 45, "info": "Public sentiment moderately supports Israel."},
+    "Turkey": {"Israel": 30, "Palestine": 70, "info": "Public opinion strongly favors supporting Palestine."},
+    "Bhutan": {"Israel": 50, "Palestine": 50, "info": "Public sentiment remains neutral."}
+  },
+  "Oceania": {
+    "Australia": {"Israel": 60, "Palestine": 40, "info": "Public opinion moderately supports Israel."},
+    "New Zealand": {"Israel": 40, "Palestine": 60, "info": "Public sentiment leans towards supporting Palestine."},
+    "Papua New Guinea": {"Israel": 55, "Palestine": 45, "info": "Public opinion moderately supports Israel."},
+    "Fiji": {"Israel": 50, "Palestine": 50, "info": "Public sentiment is evenly split."},
+    "Samoa": {"Israel": 50, "Palestine": 50, "info": "Public opinion remains mixed with no significant majority."},
+    "Tonga": {"Israel": 50, "Palestine": 50, "info": "Public sentiment remains neutral."},
+    "Vanuatu": {"Israel": 50, "Palestine": 50, "info": "Public opinion is evenly split."},
+    "Solomon Islands": {"Israel": 55, "Palestine": 45, "info": "Public sentiment moderately supports Israel."},
+    "Micronesia": {"Israel": 80, "Palestine": 20, "info": "Public opinion strongly supports Israel."},
+    "Palau": {"Israel": 75, "Palestine": 25, "info": "Public sentiment strongly supports Israel."},
+    "Marshall Islands": {"Israel": 80, "Palestine": 20, "info": "Public opinion strongly supports Israel."},
+    "Kiribati": {"Israel": 50, "Palestine": 50, "info": "Public sentiment remains balanced."},
+    "Nauru": {"Israel": 55, "Palestine": 45, "info": "Public opinion moderately supports Israel."},
+    "Tuvalu": {"Israel": 50, "Palestine": 50, "info": "Public sentiment remains neutral."}
+  }
+    };
+
+    // Function to create and append elements
+    function createElement(tag, className, textContent) {
+      const element = document.createElement(tag);
+      if (className) element.className = className;
+      if (textContent) element.textContent = textContent;
+      return element;
+    }
+
+    // Function to render the data
+    function renderData(data) {
+      const container = document.getElementById('dataContainer');
+      container.innerHTML = ''; // Clear any existing content
+
+      for (const continent in data) {
+        // Create Continent Container
+        const continentDiv = createElement('div', 'continent');
+
+        // Create Continent Header
+        const continentHeader = createElement('div', 'continent-header', continent);
+        continentDiv.appendChild(continentHeader);
+
+        // Create Continent Content
+        const continentContent = createElement('div', 'continent-content');
+        continentDiv.appendChild(continentContent);
+
+        // Iterate through countries in the continent
+        const countries = data[continent];
+        for (const country in countries) {
+          const countryData = countries[country];
+
+          // Create Country Container
+          const countryDiv = createElement('div', 'country');
+
+          // Create Country Header
+          const countryHeader = createElement('div', 'country-header', country);
+          countryDiv.appendChild(countryHeader);
+
+          // Create Country Content
+          const countryContent = createElement('div', 'country-content');
+
+          // Create Info Div
+          const infoDiv = createElement('div', 'info');
+          infoDiv.innerHTML = `<strong>Israel:</strong> ${countryData["Israel"]}%<br>
+                               <strong>Palestine:</strong> ${countryData["Palestine"]}%<br>
+                               ${countryData["info"]}`;
+          countryContent.appendChild(infoDiv);
+          countryDiv.appendChild(countryContent);
+          continentContent.appendChild(countryDiv);
+
+          // Toggle Country Content on Click
+          countryHeader.addEventListener('click', function() {
+            this.classList.toggle('active');
+            countryContent.classList.toggle('active');
+          });
+        }
+
+        container.appendChild(continentDiv);
+
+        // Toggle Continent Content on Click
+        continentHeader.addEventListener('click', function() {
+          this.classList.toggle('active');
+          continentContent.classList.toggle('active');
+        });
+      }
+    }
+
+    // Function to handle search
+    function handleSearch() {
+      const query = document.getElementById('searchBox').value.toLowerCase();
+      const continents = document.querySelectorAll('.continent');
+
+      continents.forEach(continent => {
+        const continentHeader = continent.querySelector('.continent-header');
+        const countries = continent.querySelectorAll('.country');
+
+        let continentHasMatch = false;
+
+        countries.forEach(country => {
+          const countryHeader = country.querySelector('.country-header');
+          const countryName = countryHeader.textContent.toLowerCase();
+
+          if (countryName.includes(query)) {
+            country.style.display = '';
+            continentHasMatch = true;
+          } else {
+            country.style.display = 'none';
+          }
+        });
+
+        if (continentHasMatch) {
+          continent.style.display = '';
+        } else {
+          continent.style.display = 'none';
+        }
+      });
+    }
+
+    // Initialize and render data on page load
+    document.addEventListener('DOMContentLoaded', function() {
+      renderData(data);
+
+      // Attach search event listener
+      document.getElementById('searchBox').addEventListener('input', handleSearch);
+    });
+  </script>
+</body>
+</html>
