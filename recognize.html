@@ -20,8 +20,8 @@
 <script>
 (async () => {
     const status = document.getElementById('status');
-    let faceMatcher = null;
-    let recognizer = new faceapi.FaceRecognizer();
+    let faceMatcher = new faceapi.FaceMatcher([], 0.5);
+    let labeledDescriptors = [];
     let isTraining = false;
     let trainedFaces = 0;
     
@@ -50,7 +50,7 @@
         return;
     }
 
-    // Enhanced enrollment process
+    // Modern enrollment process
     const enrollUser = async () => {
         if(trainedFaces >= 10) return;
         isTraining = true;
@@ -72,13 +72,14 @@
             }
 
             if(descriptors.length > 2) {
-                descriptors.forEach(descriptor => {
-                    recognizer.addFace(descriptor, `User ${trainedFaces + 1}`);
+                const label = `User ${++trainedFaces}`;
+                labeledDescriptors.push({
+                    label,
+                    descriptors: descriptors
                 });
-                trainedFaces++;
-                faceMatcher = new faceapi.FaceMatcher(recognizer.getLabeledDescriptors());
+                faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.5);
                 
-                status.innerHTML = `✅ User ${trainedFaces} enrolled!<br>
+                status.innerHTML = `✅ ${label} enrolled!<br>
                                    <span class="highlight">Auto-continuing in 3 seconds...</span>`;
                 setTimeout(enrollUser, 3000);
             } else {
@@ -92,7 +93,7 @@
         isTraining = false;
     };
 
-    // Robust face detection
+    // Face detection using modern API
     const detectFaces = async () => {
         if(isTraining || !faceMatcher) return;
         
