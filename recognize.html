@@ -2,9 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Face Recognition Tool</title>
+  <title>Auto Face Recognition Tool</title>
   <style>
-    /* Dark–mode styling */
+    /* Dark-mode styling */
     body {
       background-color: #121212;
       color: #e0e0e0;
@@ -16,11 +16,11 @@
     header {
       background-color: #1f1f1f;
       padding: 10px 20px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
     }
-    h1 { margin: 0; font-size: 24px; }
+    h1 {
+      margin: 0;
+      font-size: 24px;
+    }
     #videoContainer {
       position: relative;
       display: inline-block;
@@ -35,17 +35,7 @@
       top: 0;
       left: 0;
     }
-    .button {
-      background-color: #333;
-      color: #fff;
-      border: none;
-      padding: 10px 20px;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 14px;
-    }
-    .button:hover { background-color: #555; }
-    #instructions, #registeredList {
+    #instructions {
       margin: 15px auto;
       max-width: 720px;
       font-size: 16px;
@@ -56,32 +46,33 @@
 </head>
 <body>
   <header>
-    <h1>Face Recognition Tool</h1>
-    <button id="registerButton" class="button">Register New Face</button>
+    <h1>Auto Face Recognition Tool</h1>
   </header>
   <div id="instructions">
-    Instructions: Allow your webcam, then click "Register New Face" to enroll your face.
+    Instructions: Allow webcam access. Faces will be automatically enrolled when steadily visible (≈2 seconds). (Up to 10 faces)
   </div>
   <div id="videoContainer">
     <video id="video" width="720" height="560" autoplay muted></video>
     <canvas id="overlay"></canvas>
-  </div>
-  <div id="registeredList">
-    Registered Faces: None
   </div>
 
   <script>
     // Global variables
     const video = document.getElementById('video');
     const canvas = document.getElementById('overlay');
-    const registerButton = document.getElementById('registerButton');
     const instructions = document.getElementById('instructions');
-    const registeredList = document.getElementById('registeredList');
-    let labeledFaceDescriptors = []; // Array to store registered faces
-    let faceMatcher = null;          // face-api.FaceMatcher instance (updated after registration)
-    let isRegistering = false;       // Prevent concurrent registrations
 
-    // Set up webcam video stream
+    // Store registered faces (each is a face-api.LabeledFaceDescriptors)
+    let labeledFaceDescriptors = [];
+    let faceMatcher = null;
+    const maxFaces = 10;
+
+    // Parameters for automatic registration
+    const registrationDelay = 2000; // milliseconds a face must be continuously seen before auto registration
+    const pendingTimeout = 1500;    // if not re-detected for 1500 ms, discard pending registration
+    let pendingRegistrations = [];  // Array of pending objects { id, startTime, lastSeen, descriptor, center }
+
+    // Start webcam video
     async function startVideo() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: {} });
@@ -91,7 +82,7 @@
       }
     }
 
-    // Load face-api models from a public URL
+    // Load the face-api.js models (using pre–trained models hosted online)
     async function loadModels() {
       const MODEL_URL = 'https://justadudewhohacks.github.io/face-api.js/models';
       await Promise.all([
@@ -101,154 +92,133 @@
       ]);
     }
 
-    // Utility: Sleep for a given number of milliseconds
+    // Utility: Sleep for a specified time (ms)
     function sleep(ms) {
       return new Promise(resolve => setTimeout(resolve, ms));
     }
 
-    // Average an array of face descriptor vectors (Float32Array)
-    function averageDescriptors(descriptors) {
-      if (descriptors.length === 0) return null;
-      const numDescriptors = descriptors.length;
-      const avgDescriptor = new Float32Array(descriptors[0].length);
-      descriptors.forEach(desc => {
-        for (let i = 0; i < desc.length; i++) {
-          avgDescriptor[i] += desc[i];
-        }
-      });
-      for (let i = 0; i < avgDescriptor.length; i++) {
-        avgDescriptor[i] /= numDescriptors;
-      }
-      return avgDescriptor;
+    // Compute the center of a bounding box
+    function getCenter(box) {
+      return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
     }
 
-    // Capture several samples for a new face registration
-    async function captureFaceSamples(numSamples = 5) {
-      const descriptors = [];
-      instructions.textContent = `Registration: Please look at the camera. Capturing sample 1 of ${numSamples}...`;
-      for (let i = 0; i < numSamples; i++) {
-        let detection = null;
-        // Wait until a face is detected
-        while (!detection) {
-          detection = await faceapi
-            .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
-            .withFaceLandmarks()
-            .withFaceDescriptor();
-          await sleep(200);
-        }
-        descriptors.push(detection.descriptor);
-        instructions.textContent = `Registration: Captured sample ${i + 1} of ${numSamples}. Please hold still...`;
-        await sleep(600); // short pause before next sample
-      }
-      return averageDescriptors(descriptors);
+    // Euclidean distance between two points
+    function distance(p1, p2) {
+      const dx = p1.x - p2.x, dy = p1.y - p2.y;
+      return Math.sqrt(dx * dx + dy * dy);
     }
 
-    // Register a new face
-    async function registerFace() {
-      if (isRegistering) return; // Avoid re-entrance
-      if (labeledFaceDescriptors.length >= 10) {
-        instructions.textContent = "Maximum of 10 faces already registered.";
-        return;
-      }
-      isRegistering = true;
-      registerButton.disabled = true;
-      const personLabel = "Person " + (labeledFaceDescriptors.length + 1);
-      instructions.textContent = `Registration: We will capture a few samples for ${personLabel}. Please remain in front of the camera.`;
-      const descriptor = await captureFaceSamples();
-      if (descriptor) {
-        // Create a new labeled descriptor (face-api expects an array of descriptors per person)
-        const newLabeledDescriptor = new faceapi.LabeledFaceDescriptors(personLabel, [descriptor]);
-        labeledFaceDescriptors.push(newLabeledDescriptor);
-        // Update face matcher with new descriptors (0.6 is the default threshold)
-        faceMatcher = new faceapi.FaceMatcher(labeledFaceDescriptors, 0.6);
-        instructions.textContent = `Registration complete for ${personLabel}.`;
-        updateRegisteredList();
+    // For a detection that is not recognized, update (or create) a pending registration
+    function handleAutoRegistration(detection, currentTime) {
+      const center = getCenter(detection.detection.box);
+      // Check if there’s an existing pending registration near this detection
+      let pending = pendingRegistrations.find(pr => distance(pr.center, center) < 50);
+      if (pending) {
+        pending.lastSeen = currentTime;
+        pending.descriptor = detection.descriptor; // update descriptor with latest value
+        pending.center = center;
       } else {
-        instructions.textContent = "Registration failed. Please try again.";
-      }
-      registerButton.disabled = false;
-      isRegistering = false;
-      // Restore default instruction after a short delay
-      setTimeout(() => {
-        instructions.textContent = 'Instructions: Allow your webcam, then click "Register New Face" to enroll your face.';
-      }, 2000);
-    }
-
-    // Update the list of registered faces in the UI
-    function updateRegisteredList() {
-      if (labeledFaceDescriptors.length === 0) {
-        registeredList.textContent = "Registered Faces: None";
-      } else {
-        const names = labeledFaceDescriptors.map(ld => ld.label).join(', ');
-        registeredList.textContent = "Registered Faces: " + names;
+        pending = {
+          id: Date.now() + Math.random(),
+          startTime: currentTime,
+          lastSeen: currentTime,
+          descriptor: detection.descriptor,
+          center: center
+        };
+        pendingRegistrations.push(pending);
       }
     }
 
-    // Continuously detect and recognize faces from the video stream
+    // Remove pending registrations that haven’t been updated recently
+    function updatePendingRegistrations(currentTime) {
+      pendingRegistrations = pendingRegistrations.filter(pr => (currentTime - pr.lastSeen) <= pendingTimeout);
+    }
+
+    // Check pending registrations and register any that have been stable long enough
+    function checkAndRegisterPending(currentTime) {
+      // Loop backward so removals don’t disturb the iteration
+      for (let i = pendingRegistrations.length - 1; i >= 0; i--) {
+        const pr = pendingRegistrations[i];
+        if (currentTime - pr.startTime >= registrationDelay) {
+          // Auto-register this face if we haven’t reached the maximum number of faces
+          if (labeledFaceDescriptors.length < maxFaces) {
+            const label = "Person " + (labeledFaceDescriptors.length + 1);
+            const newDescriptor = new faceapi.LabeledFaceDescriptors(label, [pr.descriptor]);
+            labeledFaceDescriptors.push(newDescriptor);
+            faceMatcher = new faceapi.FaceMatcher(labeledFaceDescriptors, 0.6);
+            instructions.textContent = `Auto-registered ${label}`;
+          }
+          // Remove this pending registration after registering
+          pendingRegistrations.splice(i, 1);
+        }
+      }
+    }
+
+    // Main loop: continuously detect faces and perform recognition/auto-registration
     async function onPlay() {
-      if (video.paused || video.ended) {
-        return setTimeout(() => onPlay(), 1000);
-      }
-      // Adjust canvas size to match video dimensions
+      if (video.paused || video.ended) return setTimeout(() => onPlay(), 1000);
       const displaySize = { width: video.width, height: video.height };
       faceapi.matchDimensions(canvas, displaySize);
-      
+
       // Detect all faces with landmarks and descriptors
       const detections = await faceapi
         .detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
         .withFaceLandmarks()
         .withFaceDescriptors();
-      
-      // Resize the results to match the display size
       const resizedDetections = faceapi.resizeResults(detections, displaySize);
-      
-      // Clear the canvas for new drawings
+
       const ctx = canvas.getContext('2d');
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      
-      // For each detection, attempt to recognize the face
+      const currentTime = Date.now();
+
+      // Process each detection
       resizedDetections.forEach(detection => {
-        const box = detection.detection.box;
         let label = "Unknown";
         if (faceMatcher) {
           const bestMatch = faceMatcher.findBestMatch(detection.descriptor);
           label = bestMatch.toString();
+          // If no known match and we haven’t yet reached max faces, consider auto-registration
+          if (bestMatch.label === "unknown" && labeledFaceDescriptors.length < maxFaces) {
+            handleAutoRegistration(detection, currentTime);
+          }
+        } else {
+          // No faces registered yet – auto-register the first face seen
+          handleAutoRegistration(detection, currentTime);
         }
-        // Draw bounding box
+
+        // Draw bounding box and label for each detected face
+        const box = detection.detection.box;
         ctx.strokeStyle = "#00FF00";
         ctx.lineWidth = 2;
         ctx.strokeRect(box.x, box.y, box.width, box.height);
-        // Draw label background
         ctx.fillStyle = "#00FF00";
         ctx.font = "16px Arial";
-        const textWidth = ctx.measureText(label).width;
+        const text = label;
+        const textWidth = ctx.measureText(text).width;
         const textHeight = 16;
         ctx.fillRect(box.x, box.y - textHeight, textWidth + 4, textHeight + 4);
-        // Draw label text
         ctx.fillStyle = "#121212";
-        ctx.fillText(label, box.x + 2, box.y - 2);
+        ctx.fillText(text, box.x + 2, box.y - 2);
       });
-      
-      // Run detection again after a short delay
+
+      // Update pending registrations and check for auto-registration candidates
+      updatePendingRegistrations(currentTime);
+      checkAndRegisterPending(currentTime);
+
       setTimeout(() => onPlay(), 200);
     }
 
-    // Initialize: load models, start video, and set up event listeners
+    // Initialize: load models, start video, then begin processing when the video plays
     async function init() {
       await loadModels();
       await startVideo();
       video.addEventListener('playing', () => {
-        // Set canvas dimensions to match the video once it starts playing
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
         onPlay();
       });
     }
 
-    // Event listener for the registration button
-    registerButton.addEventListener('click', registerFace);
-
-    // Start the application
     init();
   </script>
 </body>
