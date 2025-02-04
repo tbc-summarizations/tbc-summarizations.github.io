@@ -1,127 +1,118 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Auto Face Recognition</title>
-    <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.6.7/dist/face-api.min.js"></script>
+    <title>Zero-Config Face Recognition</title>
+    <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.0/dist/face-api.min.js"></script>
     <style>
-        :root { --bg: #121212; --fg: #e0e0e0; --primary: #00b4d8; --secondary: #2a2a2a; }
-        body { font-family: system-ui, sans-serif; margin: 0; background: var(--bg); 
-               color: var(--fg); display: flex; flex-direction: column; align-items: center; }
+        :root { --bg: #0a0a0a; --fg: #f0f0f0; --primary: #00ff88; --secondary: #222222; }
+        body { margin: 0; background: var(--bg); color: var(--fg); font-family: Arial, sans-serif; }
+        #container { display: flex; flex-direction: column; align-items: center; padding: 20px; }
         #video { width: 640px; height: 480px; border-radius: 8px; background: #000; }
-        .status { background: var(--secondary); padding: 1rem; border-radius: 8px;
-                  margin: 1rem; max-width: 640px; text-align: center; }
-        .highlight { color: var(--primary); font-weight: bold; }
+        .status { margin-top: 20px; padding: 15px; background: var(--secondary); border-radius: 8px; width: 640px; }
     </style>
 </head>
 <body>
-    <video id="video" autoplay muted></video>
-    <div class="status" id="status">Initializing...</div>
+    <div id="container">
+        <video id="video" autoplay muted></video>
+        <div class="status" id="status">Initializing system...</div>
+    </div>
 
 <script>
 (async () => {
     const status = document.getElementById('status');
-    let faceMatcher = new faceapi.FaceMatcher([], 0.5);
-    let labeledDescriptors = [];
+    const video = document.getElementById('video');
+    let faceMatcher = null;
+    const knownFaces = new Map();
     let isTraining = false;
-    let trainedFaces = 0;
-    
+    let currentUser = 1;
+
     // Load models from CDN
     try {
-        status.innerHTML = "⚙️ Loading AI models...";
-        await Promise.all([
-            faceapi.nets.ssdMobilenetv1.loadFromUri('https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.6.7/model/'),
-            faceapi.nets.faceLandmark68Net.loadFromUri('https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.6.7/model/'),
-            faceapi.nets.faceRecognitionNet.loadFromUri('https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.6.7/model/')
-        ]);
+        status.textContent = 'Loading neural networks...';
+        await faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.0/model/');
+        await faceapi.nets.faceLandmark68Net.loadFromUri('https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.0/model/');
+        await faceapi.nets.faceRecognitionNet.loadFromUri('https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.0/model/');
     } catch (error) {
-        status.innerHTML = "❌ Failed to load models. Please refresh the page.";
+        status.textContent = 'Failed to load AI models. Please check internet connection.';
         return;
     }
 
     // Setup camera
     try {
-        const video = document.getElementById('video');
         const stream = await navigator.mediaDevices.getUserMedia({ video: {} });
         video.srcObject = stream;
         await new Promise(resolve => video.onloadedmetadata = resolve);
         video.play();
     } catch (error) {
-        status.innerHTML = "❌ Camera access denied. Please enable camera permissions.";
+        status.textContent = 'Camera access required. Please enable permissions.';
         return;
     }
 
-    // Modern enrollment process
-    const enrollUser = async () => {
-        if(trainedFaces >= 10) return;
-        isTraining = true;
-        
-        status.innerHTML = `👤 Please face the camera (User ${trainedFaces+1})<br>
-                           <span class="highlight">▶ Enrollment in progress...</span>`;
+    // Auto-enrollment process
+    const captureTrainingData = async () => {
+        status.textContent = `Training User ${currentUser}: Face the camera (${knownFaces.size}/5 samples)`;
         
         try {
-            const descriptors = [];
-            for(let i = 0; i < 5; i++) {
-                const detection = await faceapi.detectSingleFace(video)
-                    .withFaceLandmarks()
-                    .withFaceDescriptor();
-                
-                if(detection?.descriptor) {
-                    descriptors.push(detection.descriptor);
-                }
-                await new Promise(resolve => setTimeout(resolve, 500));
+            const result = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+                .withFaceLandmarks()
+                .withFaceDescriptor();
+            
+            if (result) {
+                const descriptors = knownFaces.get(`User ${currentUser}`) || [];
+                descriptors.push(result.descriptor);
+                knownFaces.set(`User ${currentUser}`, descriptors);
             }
 
-            if(descriptors.length > 2) {
-                const label = `User ${++trainedFaces}`;
-                labeledDescriptors.push({
-                    label,
-                    descriptors: descriptors
-                });
-                faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.5);
-                
-                status.innerHTML = `✅ ${label} enrolled!<br>
-                                   <span class="highlight">Auto-continuing in 3 seconds...</span>`;
-                setTimeout(enrollUser, 3000);
+            if (knownFaces.size < 5) {
+                setTimeout(captureTrainingData, 500);
             } else {
-                status.innerHTML = "❌ Insufficient face data - please try again";
-                setTimeout(enrollUser, 2000);
+                finalizeTraining();
             }
         } catch (error) {
-            status.innerHTML = "⚠️ Enrollment error - restarting process...";
-            setTimeout(enrollUser, 2000);
+            console.error('Detection error:', error);
+            setTimeout(captureTrainingData, 500);
         }
-        isTraining = false;
     };
 
-    // Face detection using modern API
-    const detectFaces = async () => {
-        if(isTraining || !faceMatcher) return;
+    const finalizeTraining = () => {
+        const labeledDescriptors = Array.from(knownFaces.entries()).map(([label, descriptors]) => 
+            new faceapi.LabeledFaceDescriptors(label, descriptors)
+        );
         
-        try {
-            const detections = await faceapi.detectAllFaces(video)
+        faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.6);
+        status.textContent = `User ${currentUser} trained! Next user in 3 seconds...`;
+        
+        if (currentUser < 10) {
+            currentUser++;
+            knownFaces.clear();
+            setTimeout(captureTrainingData, 3000);
+        } else {
+            status.textContent = 'Training complete! Starting recognition...';
+            startRecognition();
+        }
+    };
+
+    // Recognition loop
+    const startRecognition = async () => {
+        setInterval(async () => {
+            const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
                 .withFaceLandmarks()
                 .withFaceDescriptors();
             
-            const validDetections = detections.filter(d => d?.descriptor);
-            const labeled = validDetections.map(d => 
+            const results = detections.map(d => 
                 faceMatcher.findBestMatch(d.descriptor)
             );
             
-            status.innerHTML = labeled.length > 0 
-                ? labeled.map((l, i) => 
-                    `👤 ${l.label} (${Math.round((1 - l.distance) * 100)}% confident)`
-                  ).join("<br>")
-                : "No faces detected";
-        } catch (error) {
-            console.error('Detection error:', error);
-        }
+            status.textContent = results.length > 0 
+                ? results.map(r => `${r.label} (${Math.round((1 - r.distance) * 100)}%)`).join('\n')
+                : 'No faces detected';
+        }, 1000);
     };
 
-    // Start process
-    video.addEventListener('play', async () => {
+    // Start automatic training
+    video.addEventListener('play', () => {
         faceapi.matchDimensions(video, video);
-        setTimeout(enrollUser, 1000);
-        setInterval(detectFaces, 1000);
+        captureTrainingData();
     });
 })();
 </script>
