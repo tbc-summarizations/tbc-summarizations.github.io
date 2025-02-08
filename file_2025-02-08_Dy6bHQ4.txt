@@ -1,0 +1,415 @@
+/************************************************************
+ * QOD Bot (Discord + Google Gemini Example, with Safety Settings)
+ ************************************************************/
+
+// ------------------ Imports & Setup ------------------ //
+const { Client, GatewayIntentBits, Events } = require('discord.js');
+const fs = require('fs');
+const path = require('path');
+
+// Google Generative AI imports
+// npm install @google/generative-ai
+const {
+  GoogleGenerativeAI
+} = require('@google/generative-ai');
+
+// Hardcoded token (WARNING: not secure in real deployment!)
+const DISCORD_TOKEN = 'nuh uh bro thats my token';
+
+// Hardcoded Google Gemini API Key (WARNING: not secure in real deployment!)
+const GEMINI_API_KEY = 'fart api key';
+
+// The QOD channel info
+const GUILD_ID = '1167901857310585106';
+const CHANNEL_ID = '1175846094949863515';
+
+// The role mention tag
+const ROLE_TAG = '<@&1176736480782196768>';
+
+// Bot user ID (exclude from day-counting)
+const BOT_USER_ID = '1256520744783843381';
+
+// Filenames for tracking data
+// Overwritten on startup, then updated daily
+const QOD_FILE = path.join(__dirname, 'qod.txt');              
+const COUNT_FILE = path.join(__dirname, 'count.txt');          
+const GAP_FILE = path.join(__dirname, 'gap.txt');             
+const STREAK_FILE = path.join(__dirname, 'streak.txt');        
+const CURRENT_STREAK_FILE = path.join(__dirname, 'currentstreak.txt');
+const LAST_QUESTION_FILE = path.join(__dirname, 'lastQuestionDay.txt'); // The UTC+5 date we last posted an AI question
+
+// -------------- Google Generative AI Setup -------------- //
+
+// Use your desired safety settings:
+const safetySettings = [
+  { category: "HARM_CATEGORY_HARASSMENT", threshold: "OFF" },
+  { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "OFF" },
+  { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "OFF" },
+  { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "OFF" },
+  { category: "HARM_CATEGORY_CIVIC_INTEGRITY", threshold: "OFF" },
+];
+
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({
+  model: 'gemini-1.5-flash-8b',
+  safetySettings,
+});
+
+const generationConfig = {
+  temperature: 1,
+  topP: 0.95,
+  topK: 40,
+  maxOutputTokens: 8192,
+  responseMimeType: 'text/plain',
+};
+
+// -------------- Discord Client Setup -------------- //
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+  ],
+});
+
+// We'll track "last check day" in memory to see when we've crossed midnight in UTC+5
+let lastCheckDayUTC5 = null;
+
+// -------------- Helper Functions -------------- //
+
+/**
+ * Convert a Date to a "YYYY-MM-DD" string in UTC+5
+ */
+function dateToUTC5String(dateObj) {
+  // 5 hours in ms
+  const shiftMs = 5 * 60 * 60 * 1000; 
+  const shiftedTime = dateObj.getTime() + shiftMs;
+  const shiftedDate = new Date(shiftedTime);
+  // Format as YYYY-MM-DD
+  const year = shiftedDate.getUTCFullYear();
+  const month = String(shiftedDate.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(shiftedDate.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Safe file read. Returns a string or a default if file doesn't exist.
+ */
+function safeReadFile(filename, defaultVal = '') {
+  try {
+    return fs.readFileSync(filename, 'utf8').trim();
+  } catch {
+    return defaultVal;
+  }
+}
+
+/**
+ * Write a string to a file (sync).
+ */
+function safeWriteFile(filename, content) {
+  fs.writeFileSync(filename, content, 'utf8');
+}
+
+/**
+ * Fetch all messages from a channel, oldest -> newest.
+ */
+async function fetchAllMessages(channel) {
+  let all = [];
+  let lastId = null;
+  const batchSize = 100;
+
+  while (true) {
+    const fetched = await channel.messages.fetch({
+      limit: batchSize,
+      before: lastId || undefined,
+    });
+    if (fetched.size === 0) break;
+    all = all.concat([...fetched.values()]);
+    lastId = fetched.last().id;
+    if (fetched.size < batchSize) break;
+  }
+
+  // Sort ascending
+  all.sort((a, b) => a.createdTimestamp - b.createdTimestamp);
+  return all;
+}
+
+/**
+ * Recalculate QOD lines (qod.txt) and counters (count.txt, gap.txt, streak.txt, currentstreak.txt)
+ * based on all historical messages. Ignores the bot's own ID for "user-based" mention counting.
+ * Overwrites the files with final values.
+ */
+function recountAndWriteFiles(allMessages) {
+  // We'll keep a set of days that have a user mention
+  const userMentionDays = new Set();
+  // We'll collect lines for qod.txt (both user & bot messages, if mention + text)
+  const qodLines = [];
+
+  for (const msg of allMessages) {
+    if (msg.content.includes(ROLE_TAG)) {
+      // Clean newlines -> spaces
+      const cleaned = msg.content.replace(/\r?\n/g, ' ');
+      // If there's more text than just the mention
+      if (cleaned.trim() !== ROLE_TAG) {
+        qodLines.push(cleaned);
+      }
+      // For counting days, ignore if it's the bot's own mention
+      if (msg.author.id !== BOT_USER_ID) {
+        const dayStr = dateToUTC5String(msg.createdAt);
+        userMentionDays.add(dayStr);
+      }
+    }
+  }
+
+  // Overwrite qod.txt
+  safeWriteFile(QOD_FILE, qodLines.join('\n'));
+
+  // If no messages, set counters to 0
+  if (allMessages.length === 0) {
+    safeWriteFile(COUNT_FILE, '0');
+    safeWriteFile(GAP_FILE, '0');
+    safeWriteFile(STREAK_FILE, '0');
+    safeWriteFile(CURRENT_STREAK_FILE, '0');
+    return;
+  }
+
+  // Find oldest day in UTC+5
+  const oldestMsgDate = allMessages[0].createdAt;
+  const oldestDayStr = dateToUTC5String(oldestMsgDate);
+
+  // "Today" in UTC+5
+  const now = new Date();
+  const nowDayStr = dateToUTC5String(now);
+
+  // We'll iterate from the oldestDay to nowDay in ascending order
+  // Convert them to real JS Dates for day-by-day iteration
+  // We'll shift them to midnight UTC. Then shift +5 hours for consistency.
+  function parseUTC5(dayStr) {
+    // "YYYY-MM-DD" => new Date(YYYY, MM-1, DD) in UTC
+    // Then shift 5h. Actually simpler is:
+    const parts = dayStr.split('-').map(x => parseInt(x, 10));
+    // parts = [yyyy, mm, dd]
+    return new Date(Date.UTC(parts[0], parts[1] - 1, parts[2])); 
+  }
+
+  const oldestDayDate = parseUTC5(oldestDayStr);
+  const nowDayDate = parseUTC5(nowDayStr);
+
+  const MS_PER_DAY = 24 * 60 * 60 * 1000;
+  let missedDays = 0;
+  let maxGap = 0;
+  let maxStreak = 0;
+  let currentGap = 0;
+  let currentStreak = 0;
+
+  // day-by-day iteration
+  for (let d = new Date(oldestDayDate); d <= nowDayDate; d = new Date(d.getTime() + MS_PER_DAY)) {
+    const dayString = dateToUTC5String(d);
+    if (userMentionDays.has(dayString)) {
+      // user mention => streak++
+      currentStreak++;
+      if (currentStreak > maxStreak) {
+        maxStreak = currentStreak;
+      }
+      // gap resets
+      currentGap = 0;
+    } else {
+      // missed day
+      missedDays++;
+      currentGap++;
+      if (currentGap > maxGap) {
+        maxGap = currentGap;
+      }
+      // streak resets
+      currentStreak = 0;
+    }
+  }
+
+  safeWriteFile(COUNT_FILE, missedDays.toString());
+  safeWriteFile(GAP_FILE, maxGap.toString());
+  safeWriteFile(STREAK_FILE, maxStreak.toString());
+  safeWriteFile(CURRENT_STREAK_FILE, currentStreak.toString());
+}
+
+/** 
+ * Reads the numeric counters from disk into an object:
+ * { missed, gap, streak, currentStreak }
+ */
+function readCountersFromDisk() {
+  const missed = parseInt(safeReadFile(COUNT_FILE, '0'), 10) || 0;
+  const gap = parseInt(safeReadFile(GAP_FILE, '0'), 10) || 0;
+  const streak = parseInt(safeReadFile(STREAK_FILE, '0'), 10) || 0;
+  const currentStreak = parseInt(safeReadFile(CURRENT_STREAK_FILE, '0'), 10) || 0;
+  return { missed, gap, streak, currentStreak };
+}
+
+/**
+ * The daily check:
+ * 1. Re-fetch all messages, recount everything -> updates qod.txt & counters.
+ * 2. Compare new "missed" vs old "missed" to see if *yesterday* was missed.
+ * 3. If a new day was missed, post an AI question *unless* we posted one yesterday already.
+ * 4. Post a second message with stats if we do post a question.
+ */
+async function dailyCheck() {
+  try {
+    const guild = await client.guilds.fetch(GUILD_ID);
+    const channel = await guild.channels.fetch(CHANNEL_ID);
+    if (!channel || !channel.isTextBased()) {
+      console.error('Channel not found or not text-based.');
+      return;
+    }
+
+    // Fetch all messages, do a complete recount
+    const allMessages = await fetchAllMessages(channel);
+    recountAndWriteFiles(allMessages);
+
+    // Read updated counters
+    const { missed, gap, streak, currentStreak } = readCountersFromDisk();
+
+    // Check if missed changed (compared to oldMissed stored in a .bak)
+    const oldMissed = parseInt(safeReadFile(COUNT_FILE + '.bak', '0'), 10);
+    // Save the new missed as .bak
+    safeWriteFile(COUNT_FILE + '.bak', missed.toString());
+
+    // If missed > oldMissed => new day was missed.
+    if (missed > oldMissed) {
+      // We'll post a question only if we *didn't* post one *today*.
+      // Because we're at midnight UTC+5 starting a new day (call it D+1).
+      // If we posted a question on day D+1 (the same day as now), skip.
+      const nowDayStr = dateToUTC5String(new Date()); // The "today" in UTC+5
+      const lastQuestionDay = safeReadFile(LAST_QUESTION_FILE, '');
+      if (lastQuestionDay === nowDayStr) {
+        // We already posted a question for this new day => skip
+        console.log(`A day was missed, but the bot already posted a QOD question today (${nowDayStr}). Skipping.`);
+        return;
+      }
+
+      // Otherwise, let's post the question
+      await generateAndPostQuestion(channel);
+
+      // Then post the second message with stats
+      const statsMessage = `## a streak of ${currentStreak} was broken!
+**__in total:__**
+- ${missed} days missed
+- ${streak} best streak
+- ${gap} longest gap`;
+      await channel.send(statsMessage);
+
+      // Mark that we posted a question on "today" (D+1).
+      safeWriteFile(LAST_QUESTION_FILE, nowDayStr);
+    }
+  } catch (err) {
+    console.error('dailyCheck error:', err);
+  }
+}
+
+/**
+ * Generates a question from the Gemini AI and posts it verbatim.
+ */
+async function generateAndPostQuestion(channel) {
+  try {
+    // QOD so far
+    const previousQOD = safeReadFile(QOD_FILE, '(no prior QOD)');
+
+    // Build the prompt
+    const prompt = `ask a poll for discord users, don't ask the following questions that have already been asked ${previousQOD}
+please say exactly "${ROLE_TAG}" then ask your question, NOTHING ELSE BEFORE OR AFTER`;
+
+    // Build a chat
+    const chatSession = model.startChat({
+      generationConfig,
+      history: [
+        {
+          role: 'user',
+          parts: [{ text: 'example\nexample\nexample example' }],
+        },
+        {
+          role: 'model',
+          parts: [{ text: 'example\nexample\nexample example' }],
+        },
+      ],
+    });
+
+    // Send the prompt
+    const result = await chatSession.sendMessage(prompt);
+    const answer = result.response.text() || '';
+
+    if (!answer.includes(ROLE_TAG)) {
+      console.log('Warning: AI response does not contain the role mention. Posting anyway.');
+    }
+
+    // Post it verbatim
+    await channel.send(answer);
+  } catch (err) {
+    console.error('generateAndPostQuestion error:', err);
+  }
+}
+
+/**
+ * Check every minute if the UTC+5 date changed. If so, do dailyCheck() for the day that just ended.
+ */
+function setupDailyCheckLoop() {
+  setInterval(async () => {
+    const now = new Date();
+    const nowDayStr = dateToUTC5String(now);
+    if (lastCheckDayUTC5 === null) {
+      lastCheckDayUTC5 = nowDayStr;
+    } else if (nowDayStr !== lastCheckDayUTC5) {
+      // new day in UTC+5 => dailyCheck for the day that just ended
+      lastCheckDayUTC5 = nowDayStr;
+      console.log(`[DailyCheck] New UTC+5 day detected: ${nowDayStr}`);
+      await dailyCheck();
+    }
+  }, 60 * 1000);
+}
+
+// -------------- Discord Event Listeners -------------- //
+
+/**
+ * On every new message:
+ * 1. If it's not from a bot,
+ * 2. And it's in our QOD channel,
+ * 3. And it has the role mention with more text than just the mention,
+ * Append it to qod.txt (replacing newlines with spaces).
+ */
+client.on(Events.MessageCreate, async (message) => {
+  if (message.author.bot) return;
+  if (message.guildId !== GUILD_ID) return;
+  if (message.channelId !== CHANNEL_ID) return;
+
+  if (message.content.includes(ROLE_TAG)) {
+    const cleaned = message.content.replace(/\r?\n/g, ' ');
+    if (cleaned.trim() !== ROLE_TAG) {
+      fs.appendFileSync(QOD_FILE, cleaned + '\n', 'utf8');
+    }
+  }
+});
+
+// -------------- Startup -------------- //
+client.once(Events.ClientReady, async () => {
+  console.log(`Logged in as ${client.user.tag} and ready.`);
+
+  try {
+    const guild = await client.guilds.fetch(GUILD_ID);
+    const channel = await guild.channels.fetch(CHANNEL_ID);
+    if (!channel || !channel.isTextBased()) {
+      console.error('Channel not found or not text-based. Exiting.');
+      return;
+    }
+
+    // On startup, fetch all messages & do a full recount
+    const allMessages = await fetchAllMessages(channel);
+    recountAndWriteFiles(allMessages);
+
+    // Prepare oldMissed in .bak
+    const { missed } = readCountersFromDisk();
+    safeWriteFile(COUNT_FILE + '.bak', missed.toString());
+
+    // Start daily check loop
+    setupDailyCheckLoop();
+  } catch (err) {
+    console.error('Startup error:', err);
+  }
+});
+
+client.login(DISCORD_TOKEN);
